@@ -79,8 +79,10 @@ async def control_light(name: str, dimmer: int):
         
     return {"status": "success"}
 
-if __name__ == "__main__":
+def main():
     pwd = getpass.getpass("Enter Casambi network password: ")
     os.environ["CASAMBI_NETWORK_PWD"] = pwd
-    
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+if __name__ == "__main__":
+    main()

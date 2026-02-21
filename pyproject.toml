@@ -15,6 +15,9 @@ dependencies = [
     "bleak"
 ]
 
+[project.scripts]
+casambi-srv = "cli.server:main"
+
 [tool.isort]
 profile = "black"
 
