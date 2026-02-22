@@ -1,7 +1,7 @@
 # Casambi Web Controller
 
 Using BLE to control a Casambi-based home lighting system via a web interface, run on local machines PC/Mac.
-Based on a great library casambi-bt (`https://github.com/lkempf/casambi-bt`) - a bluetooth based Python library for controlling Casambi networks.
+Based on [casambi-bt](https://github.com/lkempf/casambi-bt), a bluetooth based Python library for controlling Casambi networks.
 
 ## Prerequisites
 - Python 3.12 or higher.
