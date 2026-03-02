@@ -17,6 +17,13 @@ Required libraries: fastapi, uvicorn, CasambiBt
 ## Execution
 Execute the main Python script. The terminal will prompt for the Casambi network password. The system will automatically discover the network, establish a connection, and initialize the web server on port 8000.
 
+## Logical Bridge Concept
+The system introduces the concept of a "Logical Bridge". This is an abstraction layer that maps physical Casambi lighting hardware to virtual nodes. 
+
+Instead of hardcoding device-specific commands into external platforms (such as a Matter controller), the Logical Bridge exposes a standardized JSON metadata schema. Each virtual unit within this schema encapsulates its operational events (e.g., `turn_on`, `turn_off`, `set_level`, `get_state`) with directly executable Python scripts. 
+
+This architectural choice ensures high interoperability, allowing any external process with a Python interpreter to dynamically interact with the local HTTP APIs without requiring prior knowledge of the Casambi protocol.
+
 ## API Endpoints
 ### Get all lights
 
@@ -60,3 +67,35 @@ Execute the main Python script. The terminal will prompt for the Casambi network
 
 - Sample Response:
 `{ "status": "success" }`
+
+### Get logical bridge metadata
+
+- URL: `/api/metadata`
+
+- Method: GET
+
+- Description: Dynamically detects the incoming client request context to resolve the host IP and port. It outputs a JSON payload describing the network as a logical bridge. The payload embeds executable Python scripts mapped to standard lighting events (turn_on, turn_off, set_level, get_state) for automated HTTP integration.
+
+- Sample Response:
+```json
+{
+  "bridge": {
+    "id": "casambi_bridge_http",
+    "type": "dimmable_lighting_controller",
+    "network_host": "192.168.1.220",
+    "network_port": 8000
+  },
+  "devices": [
+    {
+      "node_id": "casambi_ceiling_light",
+      "name": "Ceiling Light",
+      "hardware_type": "dimmable_light",
+      "events": {
+        "turn_on": {
+          "trigger": "on_off_cluster",
+          "script": "import urllib.request\n# Execute GET request to set dimmer to maximum\nurllib.request.urlopen('[http://192.168.1.220:8000/api/set?name=Ceiling%20Light&dimmer=255](http://192.168.1.220:8000/api/set?name=Ceiling%20Light&dimmer=255)')"
+        }
+      }
+    }
+  ]
+}

@@ -2,7 +2,8 @@ import asyncio
 import os
 import getpass
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+import urllib.parse
+from fastapi import FastAPI, HTTPException, Request
 from CasambiBt import Casambi, discover
 import uvicorn
 
@@ -78,6 +79,58 @@ async def control_light(name: str, dimmer: int):
     await casa.setLevel(target_unit, dimmer)
         
     return {"status": "success"}
+
+@app.get("/api/metadata")
+async def get_bridge_metadata(request: Request):
+    # Dynamically detect host and port from the incoming HTTP request
+    host = request.url.hostname
+    port = request.url.port or 8000
+    
+    devices_metadata = []
+    
+    # Iterate over available units in the Casambi network
+    if getattr(casa, 'units', None) is not None:
+        for u in casa.units:
+            # Sanitize the device name for URL query string compatibility
+            safe_name = urllib.parse.quote(u.name)
+            node_identifier = u.name.replace(" ", "_").lower()
+            
+            device_config = {
+                "node_id": f"casambi_{node_identifier}",
+                "name": u.name,
+                "hardware_type": "dimmable_light",
+                "events": {
+                    "turn_on": {
+                        "trigger": "on_off_cluster",
+                        "script": f"import urllib.request\n# Execute GET request to set dimmer to maximum\nurllib.request.urlopen('http://{host}:{port}/api/set?name={safe_name}&dimmer=255')"
+                    },
+                    "turn_off": {
+                        "trigger": "on_off_cluster",
+                        "script": f"import urllib.request\n# Execute GET request to turn off\nurllib.request.urlopen('http://{host}:{port}/api/set?name={safe_name}&dimmer=0')"
+                    },
+                    "set_level": {
+                        "trigger": "level_control_cluster",
+                        "script": f"import sys, urllib.request\n# Convert logical level to hardware range\nlogical_level = float(sys.argv[1]) if len(sys.argv) > 1 else 1.0\nhardware_dimmer = int(logical_level * 255)\nurllib.request.urlopen(f'http://{host}:{port}/api/set?name={safe_name}&dimmer={{hardware_dimmer}}')"
+                    },
+                    "get_state": {
+                        "trigger": "state_polling",
+                        "script": f"import urllib.request\n# Retrieve current hardware status\nresponse = urllib.request.urlopen('http://{host}:{port}/api/status?name={safe_name}')\nprint(response.read().decode('utf-8'))"
+                    }
+                }
+            }
+            devices_metadata.append(device_config)
+            
+    bridge_metadata = {
+        "bridge": {
+            "id": "casambi_bridge_http",
+            "type": "dimmable_lighting_controller",
+            "network_host": host,
+            "network_port": port
+        },
+        "devices": devices_metadata
+    }
+    
+    return bridge_metadata
 
 def main():
     pwd = getpass.getpass("Enter Casambi network password: ")
