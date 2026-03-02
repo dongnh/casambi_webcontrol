@@ -34,7 +34,18 @@ This architectural choice ensures high interoperability, allowing any external p
 - Description: Retrieves the complete list of available units in the network alongside their current dimmer values.
 
 - Sample Response:
-`[ { "name": "Ceiling Light", "dimmer": 255 }, { "name": "Desk Lamp", "dimmer": 0 } ]`
+```json
+[
+  {
+      "name": "Ceiling Light",
+      "dimmer": 255
+  },
+  {
+      "name": "Desk Lamp",
+      "dimmer": 0
+  }
+]
+```
 
 ### Get specific light status
 
@@ -49,7 +60,12 @@ This architectural choice ensures high interoperability, allowing any external p
 - Description: Retrieves the current dimmer state of a specifically named unit. Returns an HTTP 404 error if the unit is not found.
 
 - Sample Response:
-`{ "name": "Ceiling Light", "dimmer": 128 }`
+```json
+{
+  "name": "Ceiling Light",
+  "dimmer": 128
+}
+```
 
 ### Control light intensity
 
@@ -66,7 +82,11 @@ This architectural choice ensures high interoperability, allowing any external p
 - Description: Transmits a command to adjust the target device to the specified dimmer level. Returns a success confirmation. Returns an HTTP 400 error if the dimmer value is invalid.
 
 - Sample Response:
-`{ "status": "success" }`
+```json
+{
+  "status": "success"
+}
+```
 
 ### Get logical bridge metadata
 
