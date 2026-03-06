@@ -98,16 +98,16 @@ This architectural choice ensures high interoperability, allowing any external p
 
   - `name` (string, required): The exact assigned name of the target device.
 
-  - `dimmer` (float, optional): The target brightness level, constrained between 0.0 and 1.0.
+  - `level` (integer, optional): The target brightness level, constrained between 0 and 254 to comply with Matter Level Control Cluster specifications.
 
-- Description: Retrieves the current level if no dimmer parameter is provided. If provided, sets the dimmer level mapped to the hardware range.
+- Description: Retrieves the current level mapped to the Matter logical range (0-254) if no parameter is provided. If provided, sets the dimmer level by mapping the Matter logical range to the underlying hardware range.
 
 - Sample Response:
 
 ```json
 {
   "status": "success",
-  "level": 0.5
+  "level": 127
 }
 ```
 
@@ -136,19 +136,19 @@ This architectural choice ensures high interoperability, allowing any external p
       "events": {
         "turn_on": {
           "trigger": "on_off_cluster",
-          "script": "import urllib.request\n# Execute GET request to set dimmer to maximum\nurllib.request.urlopen('[http://192.168.1.220:8000/api/level?name=Ceiling%20Light&dimmer=1.0](http://192.168.1.220:8000/api/level?name=Ceiling%20Light&dimmer=1.0)')"
+          "script": "import urllib.request\n# Execute GET request to set level to maximum (254)\nurllib.request.urlopen('[http://192.168.1.220:8000/api/level?name=Ceiling%20Light&level=254](http://192.168.1.220:8000/api/level?name=Ceiling%20Light&level=254)')"
         },
         "turn_off": {
           "trigger": "on_off_cluster",
-          "script": "import urllib.request\n# Execute GET request to turn off\nurllib.request.urlopen('[http://192.168.1.220:8000/api/level?name=Ceiling%20Light&dimmer=0.0](http://192.168.1.220:8000/api/level?name=Ceiling%20Light&dimmer=0.0)')"
+          "script": "import urllib.request\n# Execute GET request to turn off (0)\nurllib.request.urlopen('[http://192.168.1.220:8000/api/level?name=Ceiling%20Light&level=0](http://192.168.1.220:8000/api/level?name=Ceiling%20Light&level=0)')"
         },
         "set_level": {
           "trigger": "level_control_cluster",
-          "script": "import sys, urllib.request\n# Send logical level directly to the new API\nlogical_level = float(sys.argv[1]) if len(sys.argv) > 1 else 1.0\nurllib.request.urlopen(f'[http://192.168.1.220:8000/api/level?name=Ceiling%20Light&dimmer=](http://192.168.1.220:8000/api/level?name=Ceiling%20Light&dimmer=){logical_level}')"
+          "script": "import sys, urllib.request\n# Send integer level (0-254) directly to the API\nmatter_level = int(sys.argv[1]) if len(sys.argv) > 1 else 254\nurllib.request.urlopen(f'[http://192.168.1.220:8000/api/level?name=Ceiling%20Light&level=](http://192.168.1.220:8000/api/level?name=Ceiling%20Light&level=){matter_level}')"
         },
         "read_level": {
           "trigger": "level_control_cluster",
-          "script": "import urllib.request, json\n# Retrieve current level from the new API\nresponse = urllib.request.urlopen('[http://192.168.1.220:8000/api/level?name=Ceiling%20Light](http://192.168.1.220:8000/api/level?name=Ceiling%20Light)')\ndata = json.loads(response.read().decode('utf-8'))\nprint(data.get('level', 0.0))"
+          "script": "import urllib.request, json\n# Retrieve integer level directly from the API\nresponse = urllib.request.urlopen('[http://192.168.1.220:8000/api/level?name=Ceiling%20Light](http://192.168.1.220:8000/api/level?name=Ceiling%20Light)')\ndata = json.loads(response.read().decode('utf-8'))\nprint(data.get('level', 0))"
         }
       }
     }
