@@ -35,6 +35,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Casambi Web Controller", lifespan=lifespan)
 
+def get_unit_id(unit):
+    # Extract standard identifier (uuid, id, or address) with fallback priority
+    if hasattr(unit, 'uuid') and unit.uuid:
+        return str(unit.uuid)
+    if hasattr(unit, 'id') and unit.id:
+         return str(unit.id)
+    if hasattr(unit, 'address') and unit.address:
+         return str(unit.address)
+    # Fallback to name if no standard ID is exposed by the API
+    return str(unit.name)
+
 @app.get("/api/lights")
 async def get_lights():
     # Return empty list if network is not ready
@@ -42,10 +53,11 @@ async def get_lights():
         return []
     
     result = []
-    # Iterate through units to get current state
+    # Iterate through units to get current state and device_id
     for u in casa.units:
         dimmer = u.state.dimmer        
         result.append({
+            "device_id": get_unit_id(u),
             "name": u.name,
             "dimmer": dimmer
         })
@@ -53,21 +65,21 @@ async def get_lights():
     return result
 
 @app.get("/api/status")
-async def get_light_status(name: str):
+async def get_light_status(device_id: str):
     # Verify network connection
     if getattr(casa, 'units', None) is None or not casa.units:
         raise HTTPException(status_code=503, detail="Network disconnected")
         
-    # Search for the specified unit
+    # Search for the specified unit using standard ID
     for u in casa.units:
-        if u.name == name:
+        if get_unit_id(u) == device_id:
             dimmer = u.state.dimmer
-            return {"name": name, "dimmer": dimmer}
+            return {"device_id": device_id, "name": u.name, "dimmer": dimmer}
             
     raise HTTPException(status_code=404, detail="Unit not found")
 
 @app.get("/api/set")
-async def control_light(name: str, dimmer: int):
+async def control_light(device_id: str, dimmer: int):
     # Validate input range
     if not (0 <= dimmer <= 255):
         raise HTTPException(status_code=400, detail="Invalid level")
@@ -77,9 +89,9 @@ async def control_light(name: str, dimmer: int):
          raise HTTPException(status_code=503, detail="Network disconnected")
         
     target_unit = None
-    # Find the target unit
+    # Find the target unit using standard ID
     for u in casa.units:
-        if u.name == name:
+        if get_unit_id(u) == device_id:
             target_unit = u
             break
             
@@ -92,15 +104,15 @@ async def control_light(name: str, dimmer: int):
     return {"status": "success"}
 
 @app.get("/api/level")
-async def get_or_set_level(name: str, level: int = None):
+async def get_or_set_level(device_id: str, level: int = None):
     # Check if the network is connected
     if getattr(casa, 'units', None) is None or not casa.units:
         raise HTTPException(status_code=503, detail="Network disconnected")
         
-    # Find the target device by name
+    # Find the target device by standard ID
     target_unit = None
     for u in casa.units:
-        if u.name == name:
+        if get_unit_id(u) == device_id:
             target_unit = u
             break
             
@@ -113,7 +125,7 @@ async def get_or_set_level(name: str, level: int = None):
         current_dimmer = target_unit.state.dimmer
         # Map hardware range (0-255) to Matter logical range (0-254)
         matter_level = int((current_dimmer / 255.0) * 254) if current_dimmer is not None else 0
-        return {"name": name, "level": matter_level}
+        return {"device_id": device_id, "level": matter_level}
         
     # Validate the input range for Matter Level Control Cluster
     if not (0 <= level <= 254):
@@ -136,30 +148,36 @@ async def get_bridge_metadata(request: Request):
     # Iterate over available units in the Casambi network
     if getattr(casa, 'units', None) is not None:
         for u in casa.units:
-            # Sanitize the device name for URL query string compatibility
-            safe_name = urllib.parse.quote(u.name)
-            node_identifier = u.name.replace(" ", "_").lower()
+            unit_id = get_unit_id(u)
+            
+            # Sanitize the device ID for URL query string compatibility
+            safe_id = urllib.parse.quote(unit_id)
+            node_identifier = unit_id.replace("-", "_").replace(":", "_").lower()
+            
+            # Keep original naming logic for metadata display purposes
+            primary_name = u.names[0] if hasattr(u, 'names') and getattr(u, 'names') else getattr(u, 'name', 'Unknown_Device')
             
             device_config = {
                 "node_id": f"casambi_{node_identifier}",
-                "name": u.name,
+                "name": primary_name,
+                "device_id": unit_id,
                 "hardware_type": "dimmable_light",
                 "events": {
                     "turn_on": {
                         "trigger": "on_off_cluster",
-                        "script": f"import urllib.request\n# Execute GET request to set level to maximum (254)\nurllib.request.urlopen('http://{host}:{port}/api/level?name={safe_name}&level=254')"
+                        "script": f"import urllib.request\n# Execute GET request to set level to maximum (254)\nurllib.request.urlopen('http://{host}:{port}/api/level?device_id={safe_id}&level=254')"
                     },
                     "turn_off": {
                         "trigger": "on_off_cluster",
-                        "script": f"import urllib.request\n# Execute GET request to turn off (0)\nurllib.request.urlopen('http://{host}:{port}/api/level?name={safe_name}&level=0')"
+                        "script": f"import urllib.request\n# Execute GET request to turn off (0)\nurllib.request.urlopen('http://{host}:{port}/api/level?device_id={safe_id}&level=0')"
                     },
                     "set_level": {
                         "trigger": "level_control_cluster",
-                        "script": f"import sys, urllib.request\n# Send integer level (0-254) directly to the API\nmatter_level = int(sys.argv[1]) if len(sys.argv) > 1 else 254\nurllib.request.urlopen(f'http://{host}:{port}/api/level?name={safe_name}&level={{matter_level}}')"
+                        "script": f"import sys, urllib.request\n# Send integer level (0-254) directly to the API\nmatter_level = int(sys.argv[1]) if len(sys.argv) > 1 else 254\nurllib.request.urlopen(f'http://{host}:{port}/api/level?device_id={safe_id}&level={{matter_level}}')"
                     },
                     "read_level": {
                         "trigger": "level_control_cluster",
-                        "script": f"import urllib.request, json\n# Retrieve integer level directly from the API\nresponse = urllib.request.urlopen('http://{host}:{port}/api/level?name={safe_name}')\ndata = json.loads(response.read().decode('utf-8'))\nprint(data.get('level', 0))"
+                        "script": f"import urllib.request, json\n# Retrieve integer level directly from the API\nresponse = urllib.request.urlopen('http://{host}:{port}/api/level?device_id={safe_id}')\ndata = json.loads(response.read().decode('utf-8'))\nprint(data.get('level', 0))"
                     }
                 }
             }
