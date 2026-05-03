@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "casambi-web-controller"
-version = "0.8.0"
+version = "0.9.0"
 description = "Using BLE to control a Casambi-based home lighting system via a web interface."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -12,7 +12,8 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "casambi-bt",
-    "bleak"
+    "bleak",
+    "pydantic"
 ]
 
 [project.scripts]
