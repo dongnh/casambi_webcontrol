@@ -43,8 +43,9 @@ CLI options:
 | `--port` | `8000` | Web server port |
 | `--host` | `127.0.0.1` | Bind address. Use `0.0.0.0` to expose on LAN (warns if no API key) |
 | `--api-key` | `$CASAMBI_SRV_KEY` | Require `X-API-Key` header on all requests |
+| `--password` | — | Casambi network password (see below) |
 
-The Casambi network password is read from `$CASAMBI_NETWORK_PWD` if set; otherwise prompted interactively.
+**Password resolution order:** `--password` flag → `$CASAMBI_NETWORK_PWD` env var → interactive `getpass` prompt. The env var is preferred over `--password` because CLI args are visible to other users via `ps`. Whichever source supplies it, the value is held only on `app.state` and the env var is `pop()`'d so it does not leak via `/proc/PID/environ`.
 
 ## Federation with matter_webcontrol
 

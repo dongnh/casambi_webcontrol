@@ -456,6 +456,11 @@ def main():
         "--api-key", type=str, default=os.environ.get("CASAMBI_SRV_KEY"),
         help="Require X-API-Key header (or set CASAMBI_SRV_KEY env var)",
     )
+    parser.add_argument(
+        "--password", type=str, default=None,
+        help="Casambi network password. Prefer CASAMBI_NETWORK_PWD env var or "
+             "interactive prompt — CLI args are visible in `ps`.",
+    )
     args = parser.parse_args()
 
     if args.host != "127.0.0.1" and not args.api_key:
@@ -465,9 +470,15 @@ def main():
             args.host,
         )
 
-    # Read password from env (preferred) or interactive prompt.
-    # Stored on app.state so it does not pollute process environment.
-    password = os.environ.pop("CASAMBI_NETWORK_PWD", "")
+    # Resolution order: --password > $CASAMBI_NETWORK_PWD > interactive prompt.
+    # The env var is scrubbed and the password is held only on app.state, so it
+    # never leaks via /proc/PID/environ.
+    password = args.password or os.environ.pop("CASAMBI_NETWORK_PWD", "")
+    if args.password:
+        logger.warning(
+            "Password passed via --password is visible to other users in `ps`. "
+            "Prefer CASAMBI_NETWORK_PWD env var or the interactive prompt."
+        )
     if not password:
         password = getpass.getpass("Enter Casambi network password: ")
 
