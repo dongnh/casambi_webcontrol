@@ -480,7 +480,16 @@ def main():
             "Prefer CASAMBI_NETWORK_PWD env var or the interactive prompt."
         )
     if not password:
-        password = getpass.getpass("Enter Casambi network password: ")
+        if os.isatty(0):
+            password = getpass.getpass("Enter Casambi network password: ")
+        else:
+            # Headless (service / daemon): no TTY to prompt on. Fail with a clear
+            # message instead of crashing on getpass's EOFError.
+            parser.error(
+                "no Casambi network password and no interactive terminal; set the "
+                "CASAMBI_NETWORK_PWD environment variable (or pass --password) when "
+                "running headless / as a service."
+            )
 
     app.state.api_key = args.api_key
     app.state.network_password = password
