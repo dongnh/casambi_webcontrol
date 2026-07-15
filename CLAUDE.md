@@ -27,6 +27,11 @@ There is intentionally no `core.py` / `mcp_server.py` split (unlike matter_webco
   - Conversion via `_hardware_to_matter()` / `_matter_to_hardware()`. Always convert at the API boundary.
 - **Mireds clamp `[153, 500]`** then convert to Kelvin then re-clamp to the unit's `UnitControl.min/max` from `casambi-bt`.
 - **Toggle restores last level:** `_last_level: dict[str, int]` caches the most recent non-zero hardware level per device, so toggling on doesn't blast 100%.
+- **Connection health / self-healing (v0.10.0):** state is push-driven (casambi-bt updates `unit.state` from BLE notifications), so a *half-open* link — writes still go out, notifications stop — silently freezes state until a restart. Three mechanisms guard against it:
+  - `_health_watchdog()` (background task, `HEALTH_INTERVAL`) reconnects whenever `casa.connected` is `False`; `registerDisconnectCallback` logs drops.
+  - `_confirm_and_retry()` — every `_set_level()` schedules a non-blocking probe: after `CONFIRM_DELAY`, if the unit is `online` but its `dimmer` didn't converge to the command, retry once; after `UNCONFIRMED_RESYNC_THRESHOLD` consecutive unconfirmed writes, force a reconnect (which re-reads state from the mesh). `_pending_target` de-dupes bursts so only the latest command per unit is checked. Gated by `unit.online` (a powered-off unit won't trigger it) and `RECONNECT_COOLDOWN` (no reconnect storms).
+  - **Per-unit `online`** (from casambi-bt's `Unit.online`, a mesh flag) is now surfaced on `/api/devices`, `/api/lights`, `/api/metadata`, and aggregated on `/api/status` (`connected`, `units_online/offline`, `seconds_since_last_state_update`). This is the true per-luminaire reachability — matter_webcontrol's bridge-level `online` can't see a single dropped unit.
+  - **`POST /api/refresh?force=1`** (or `{"force": true}`) drops+reconnects even when units are present, bypassing the cooldown — a manual resync lever that avoids a full process restart. `/api/toggle` and `/api/refresh` now accept both GET and POST.
 
 ## API contract (matter_webcontrol v0.25.0 federation)
 
@@ -39,7 +44,7 @@ There is intentionally no `core.py` / `mcp_server.py` split (unlike matter_webco
 | POST | `/api/mired` | `{id, mireds}` | `set_mired()` |
 | POST | `/api/set` | `{id, brightness}` | `set_brightness()` |
 
-If you change response shapes for these four, federation breaks. The shapes are also enforced by `/tmp/test_casambi_server.py` (round-trip test against the real `LogicalBridgeClient`).
+If you change response shapes for these four, federation breaks. The shapes are also enforced by `/tmp/test_casambi_server.py` (round-trip test against the real `LogicalBridgeClient`). Adding *new* keys is safe (peers ignore unknown fields) — that's how v0.10.0 adds `online` to `/api/devices` + `/api/metadata` without breaking federation.
 
 `/api/metadata` returns `bridge.api_version: "2"` and **must not** emit `events.{name}.script` blobs (the v1 shape was an RCE risk; matter peers no longer execute them).
 
@@ -84,5 +89,6 @@ client = TestClient(srv.app)
 
 | This version | matter_webcontrol |
 |---|---|
+| 0.10.x | 0.25.x+ (federation v2; adds per-unit `online` + self-healing) |
 | 0.9.x | 0.25.x+ (federation v2) |
 | ≤ 0.6.x | ≤ 0.22.x (legacy v1 with embedded scripts; no longer supported) |
